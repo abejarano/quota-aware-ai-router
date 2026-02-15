@@ -2,34 +2,34 @@ import type { Schema } from "@google/generative-ai";
 import type {
   AIExecutionMeta,
   AIExecutionResult,
-  IProxyIAService,
+  IProxyAIProvider,
 } from "../ai.interface";
 import { normalizeStructuredSchema } from "../helpers/NormalizeStructuredSchema.helper";
 import { buildAIProviderError } from "../helpers/BuildAIProviderError.helper";
-import { findAIProviderByService } from "../helpers/AIProviderConfig.helper";
+import { findAIProviderByProvider } from "../helpers/AIProviderConfig.helper";
 
-type OpenRouterChoice = {
+type CerebrasChoice = {
   message?: {
     content?: string;
   };
 };
 
-type OpenRouterResponse = {
+type CerebrasResponse = {
   error?: {
     message?: string;
   };
-  choices?: OpenRouterChoice[];
+  choices?: CerebrasChoice[];
   [key: string]: unknown;
 };
 
-export class OpenRouterService implements IProxyIAService {
-  private static _instance: OpenRouterService | null = null;
+export class CerebrasProvider implements IProxyAIProvider {
+  private static _instance: CerebrasProvider | null = null;
 
   private logger = console;
 
   static getInstance() {
     if (!this._instance) {
-      this._instance = new OpenRouterService();
+      this._instance = new CerebrasProvider();
     }
     return this._instance;
   }
@@ -39,28 +39,28 @@ export class OpenRouterService implements IProxyIAService {
     userPrompt: string,
     schemaResponse: Schema,
   ): Promise<AIExecutionResult> {
-    const providerCfg = findAIProviderByService("openrouter");
+    const providerCfg = findAIProviderByProvider("cerebras");
     const apiKey = providerCfg?.apiKey;
     if (!apiKey) {
       throw buildAIProviderError({
-        provider: "OpenRouter",
+        provider: "Cerebras",
         message:
-          "Missing apiKey in AI_PROVIDER_CONFIG for service 'openrouter'",
+          "Missing apiKey in AI_PROVIDER_CONFIG for provider 'cerebras'",
       });
     }
 
     const model = providerCfg?.model;
     if (!model) {
       throw buildAIProviderError({
-        provider: "OpenRouter",
-        message: "Missing model in AI_PROVIDER_CONFIG for service 'openrouter'",
+        provider: "Cerebras",
+        message: "Missing model in AI_PROVIDER_CONFIG for provider 'cerebras'",
       });
     }
     const normalizedSchema = normalizeStructuredSchema(schemaResponse);
 
-    this.logger.info(`🚀 Enviando datos a OpenRouter (${model})...`);
+    this.logger.info(`🚀 Enviando datos a Cerebras (${model})...`);
 
-    const firstAttempt = await this.requestOpenRouter(apiKey, {
+    const request = await this.requestCerebras(apiKey, {
       model,
       messages: [
         { role: "system", content: systemPrompt },
@@ -76,27 +76,27 @@ export class OpenRouterService implements IProxyIAService {
       },
     });
 
-    if (!firstAttempt.ok) {
+    if (!request.ok) {
       this.logger.error(
-        `❌ ERROR CONECTANDO CON OPENROUTER: ${firstAttempt.message} | status=${firstAttempt.status} ${firstAttempt.statusText} | payload=${firstAttempt.payloadText}`,
+        `❌ ERROR CONECTANDO CON CEREBRAS: ${request.message} | status=${request.status} ${request.statusText} | payload=${request.payloadText}`,
       );
       throw buildAIProviderError({
-        provider: "OpenRouter",
-        status: firstAttempt.status,
-        message: firstAttempt.message,
+        provider: "Cerebras",
+        status: request.status,
+        message: request.message,
       });
     }
 
     return {
-      data: this.parseResponseContent(firstAttempt.payload),
+      data: this.parseContent(request.payload),
       meta: {
         model,
-        ...firstAttempt.meta,
+        ...request.meta,
       },
     };
   }
 
-  private async requestOpenRouter(
+  private async requestCerebras(
     apiKey: string,
     body: Record<string, unknown>,
   ): Promise<{
@@ -105,11 +105,11 @@ export class OpenRouterService implements IProxyIAService {
     statusText: string;
     message: string;
     payloadText: string;
-    payload: OpenRouterResponse;
+    payload: CerebrasResponse;
     meta: AIExecutionMeta;
   }> {
     const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
+      "https://api.cerebras.ai/v1/chat/completions",
       {
         method: "POST",
         headers: {
@@ -121,17 +121,17 @@ export class OpenRouterService implements IProxyIAService {
     );
 
     const raw = await response.text();
-    let payload: OpenRouterResponse = {};
+    let payload: CerebrasResponse = {};
 
     try {
-      payload = JSON.parse(raw) as OpenRouterResponse;
+      payload = JSON.parse(raw) as CerebrasResponse;
     } catch {
       payload = {};
     }
 
     const message =
       payload?.error?.message ??
-      `OpenRouter request failed with status ${response.status}`;
+      `Cerebras request failed with status ${response.status}`;
 
     return {
       ok: response.ok,
@@ -146,15 +146,13 @@ export class OpenRouterService implements IProxyIAService {
 
   private extractQuotaMeta(headers: Headers): AIExecutionMeta {
     const remainingRequests = this.toNumber(
-      headers.get("x-ratelimit-remaining-requests") ??
-        headers.get("x-ratelimit-remaining"),
+      headers.get("x-ratelimit-remaining-requests"),
     );
     const remainingTokens = this.toNumber(
       headers.get("x-ratelimit-remaining-tokens"),
     );
     const resetAtUnixMs = this.parseResetHeader(
-      headers.get("x-ratelimit-reset-requests") ??
-        headers.get("x-ratelimit-reset"),
+      headers.get("x-ratelimit-reset-requests"),
     );
 
     return {
@@ -166,12 +164,10 @@ export class OpenRouterService implements IProxyIAService {
 
   private parseResetHeader(value: string | null): number | undefined {
     if (!value) return undefined;
-
     const asNum = Number(value);
     if (Number.isFinite(asNum)) {
       return asNum > 10_000_000_000 ? asNum : Date.now() + asNum * 1000;
     }
-
     const asDate = Date.parse(value);
     return Number.isNaN(asDate) ? undefined : asDate;
   }
@@ -182,17 +178,17 @@ export class OpenRouterService implements IProxyIAService {
     return Number.isFinite(n) ? n : undefined;
   }
 
-  private parseResponseContent(payload: OpenRouterResponse): unknown {
+  private parseContent(payload: CerebrasResponse): unknown {
     const content = payload.choices?.[0]?.message?.content;
     if (!content) {
-      throw new Error("OpenRouter returned an empty response");
+      throw new Error("Cerebras returned an empty response");
     }
 
     try {
       return JSON.parse(content);
     } catch {
       throw new Error(
-        `OpenRouter returned non-JSON content: ${content.slice(0, 500)}`,
+        `Cerebras returned non-JSON content: ${content.slice(0, 500)}`,
       );
     }
   }

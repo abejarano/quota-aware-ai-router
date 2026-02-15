@@ -1,1 +1,1 @@
-export * from "./service/AIProviderRouter.service";
+export * from "./provider/AIProviderRouter.provider";

@@ -25,12 +25,12 @@ La idea central es tratar a los proveedores como un pool dinámico: priorizar lo
 
 ## Arquitectura
 
-- `src/service/AIProviderRouter.service.ts`: motor de ruteo, scoring, fallback, presupuestos y métricas.
-- `src/service/*.service.ts`: integración concreta con cada proveedor.
+- `src/provider/AIProviderRouter.provider.ts`: motor de ruteo, scoring, fallback, presupuestos y métricas.
+- `src/provider/*.provider.ts`: integración concreta con cada proveedor.
 - `src/helpers/AIProviderConfig.helper.ts`: parse/validación de `AI_PROVIDER_CONFIG`.
 - `src/helpers/BuildAIProviderError.helper.ts`: normalización de errores a códigos internos.
 - `src/errors/AIProviderError.ts`: contrato de errores tipados.
-- `src/ai.interface.ts`: interfaces compartidas (`IProxyIAService`, `AIExecutionMeta`, etc.).
+- `src/ai.interface.ts`: interfaces compartidas (`IProxyAIProvider`, `AIExecutionMeta`, etc.).
 
 ## Estrategia de selección (resumen)
 
@@ -84,7 +84,7 @@ Variables obligatorias:
 
 `AI_PROVIDER_CONFIG` debe ser un JSON array; cada entrada requiere:
 
-- `serviceName`: `groq | gemini | cerebras | openrouter | cloudflare`
+- `provider`: `groq | gemini | cerebras | openrouter | cloudflare`
 - `apiKey`: string
 - `model`: string
 - `priority`: number
@@ -93,6 +93,8 @@ Variables obligatorias:
 - `maxConcurrency`: number
 - `maxRequestsPerMinute`: number
 - `enabled`: boolean (opcional, default `true`)
+
+Compatibilidad: el campo legacy `serviceName` sigue siendo aceptado como alias de `provider`.
 
 ## Sección de ejemplo
 

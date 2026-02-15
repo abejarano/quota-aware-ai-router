@@ -1,5 +1,5 @@
 type AIProviderConfigEntry = {
-  serviceName: string
+  provider: string
   apiKey: string
   model: string
   priority: number
@@ -28,24 +28,27 @@ const validateEntry = (entry: unknown): AIProviderConfigEntry => {
 
   const e = entry as Record<string, unknown>
 
-  if (typeof e.serviceName !== "string" || !e.serviceName.trim()) {
-    throw new Error("AI provider config requires non-empty 'serviceName'")
+  // Prefer `provider`; keep backward-compat with `serviceName`.
+  const rawProvider = e.provider ?? e.serviceName
+  if (typeof rawProvider !== "string" || !rawProvider.trim()) {
+    throw new Error("AI provider config requires non-empty 'provider'")
   }
+  const provider = rawProvider.trim().toLowerCase()
 
   if (typeof e.apiKey !== "string") {
     throw new Error(
-      `AI provider '${String(e.serviceName)}' requires string 'apiKey'`
+      `AI provider '${provider}' requires string 'apiKey'`
     )
   }
 
   if (typeof e.model !== "string" || !e.model.trim()) {
     throw new Error(
-      `AI provider '${String(e.serviceName)}' requires non-empty 'model'`
+      `AI provider '${provider}' requires non-empty 'model'`
     )
   }
 
   return {
-    serviceName: e.serviceName.trim().toLowerCase(),
+    provider,
     apiKey: e.apiKey,
     model: e.model.trim(),
     priority: toNumber(e.priority),
@@ -85,14 +88,14 @@ export const readAIProviderConfig = (): AIProviderConfigEntry[] => {
   }
 
   const providers = parsed.map(validateEntry)
-  const services = new Set<string>()
+  const providerNames = new Set<string>()
   for (const p of providers) {
-    if (services.has(p.serviceName)) {
+    if (providerNames.has(p.provider)) {
       throw new Error(
-        `Duplicated provider serviceName in AI_PROVIDER_CONFIG: ${p.serviceName}`
+        `Duplicated provider in AI_PROVIDER_CONFIG: ${p.provider}`
       )
     }
-    services.add(p.serviceName)
+    providerNames.add(p.provider)
   }
 
   cacheRaw = raw
@@ -100,10 +103,13 @@ export const readAIProviderConfig = (): AIProviderConfigEntry[] => {
   return providers
 }
 
-export const findAIProviderByService = (
-  serviceName: string
+export const findAIProviderByProvider = (
+  provider: string
 ): AIProviderConfigEntry | undefined => {
   return readAIProviderConfig().find(
-    (p) => p.serviceName === serviceName.toLowerCase() && p.enabled !== false
+    (p) => p.provider === provider.toLowerCase() && p.enabled !== false
   )
 }
+
+// Backward-compat export (serviceName -> provider)
+export const findAIProviderByService = findAIProviderByProvider

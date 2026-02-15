@@ -31,3 +31,6 @@ export interface IProxyIAService {
     input: AIRepairInvalidResponseInput,
   ): Promise<AIExecutionResult>;
 }
+
+// Preferred terminology (backward-compatible alias).
+export type IProxyAIProvider = IProxyIAService;

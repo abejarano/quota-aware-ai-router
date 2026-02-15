@@ -1,16 +1,16 @@
 import { GoogleGenerativeAI, type Schema } from "@google/generative-ai";
 import { buildAIProviderError } from "../helpers/BuildAIProviderError.helper";
 import type { AIExecutionResult } from "../ai.interface";
-import { findAIProviderByService } from "../helpers/AIProviderConfig.helper";
+import { findAIProviderByProvider } from "../helpers/AIProviderConfig.helper";
 
-export class GeminiService {
-  private static _instance: GeminiService | null = null;
+export class GeminiProvider {
+  private static _instance: GeminiProvider | null = null;
 
   private logger = console;
 
   static getInstance() {
     if (!this._instance) {
-      this._instance = new GeminiService();
+      this._instance = new GeminiProvider();
     }
     return this._instance;
   }
@@ -20,12 +20,12 @@ export class GeminiService {
     userPrompt: string,
     schemaResponse: Schema,
   ): Promise<AIExecutionResult> {
-    const providerCfg = findAIProviderByService("gemini");
+    const providerCfg = findAIProviderByProvider("gemini");
     const apiKey = providerCfg?.apiKey;
     if (!apiKey) {
       throw buildAIProviderError({
         provider: "Gemini",
-        message: "Missing apiKey in AI_PROVIDER_CONFIG for service 'gemini'",
+        message: "Missing apiKey in AI_PROVIDER_CONFIG for provider 'gemini'",
       });
     }
 
@@ -34,7 +34,8 @@ export class GeminiService {
       if (!modelName) {
         throw buildAIProviderError({
           provider: "Gemini",
-          message: "Missing model in AI_PROVIDER_CONFIG for service 'gemini'",
+          message:
+            "Missing model in AI_PROVIDER_CONFIG for provider 'gemini'",
         });
       }
 

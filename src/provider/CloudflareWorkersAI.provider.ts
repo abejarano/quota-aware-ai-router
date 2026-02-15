@@ -3,11 +3,11 @@ import type {
   AIRepairInvalidResponseInput,
   AIExecutionMeta,
   AIExecutionResult,
-  IProxyIAService,
+  IProxyAIProvider,
 } from "../ai.interface";
 import { normalizeStructuredSchema } from "../helpers/NormalizeStructuredSchema.helper";
 import { buildAIProviderError } from "../helpers/BuildAIProviderError.helper";
-import { findAIProviderByService } from "../helpers/AIProviderConfig.helper";
+import { findAIProviderByProvider } from "../helpers/AIProviderConfig.helper";
 
 type CloudflareChoice = {
   message?: {
@@ -23,14 +23,14 @@ type CloudflareResponse = {
   [key: string]: unknown;
 };
 
-export class CloudflareWorkersAIService implements IProxyIAService {
-  private static _instance: CloudflareWorkersAIService | null = null;
+export class CloudflareWorkersAIProvider implements IProxyAIProvider {
+  private static _instance: CloudflareWorkersAIProvider | null = null;
 
   private logger = console;
 
   static getInstance() {
     if (!this._instance) {
-      this._instance = new CloudflareWorkersAIService();
+      this._instance = new CloudflareWorkersAIProvider();
     }
     return this._instance;
   }
@@ -40,13 +40,13 @@ export class CloudflareWorkersAIService implements IProxyIAService {
     userPrompt: string,
     schemaResponse: Schema,
   ): Promise<AIExecutionResult> {
-    const providerCfg = findAIProviderByService("cloudflare");
+    const providerCfg = findAIProviderByProvider("cloudflare");
     const configuredApiKey = providerCfg?.apiKey;
     if (!configuredApiKey) {
       throw buildAIProviderError({
         provider: "CloudflareWorkersAI",
         message:
-          "Missing apiKey in AI_PROVIDER_CONFIG for service 'cloudflare'",
+          "Missing apiKey in AI_PROVIDER_CONFIG for provider 'cloudflare'",
       });
     }
 
@@ -57,7 +57,8 @@ export class CloudflareWorkersAIService implements IProxyIAService {
     if (!model) {
       throw buildAIProviderError({
         provider: "CloudflareWorkersAI",
-        message: "Missing model in AI_PROVIDER_CONFIG for service 'cloudflare'",
+        message:
+          "Missing model in AI_PROVIDER_CONFIG for provider 'cloudflare'",
       });
     }
 

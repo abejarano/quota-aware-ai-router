@@ -1,17 +1,17 @@
 import type { Schema } from "@google/generative-ai";
-import type { AIExecutionMeta, IProxyIAService } from "../ai.interface";
+import type { AIExecutionMeta, IProxyAIProvider } from "../ai.interface";
 import Redis from "ioredis";
 import {
   AIProviderError,
   AIProviderErrorCode,
 } from "../errors/AIProviderError";
-import { buildAIProviderError } from "..//helpers/BuildAIProviderError.helper";
-import { readAIProviderConfig } from "..//helpers/AIProviderConfig.helper";
-import { GeminiService } from "..//service/Gemini.service";
-import { GroqService } from "..//service/Groq.service";
-import { CerebrasService } from "..//service/Cerebras.service";
-import { OpenRouterService } from "..//service/OpenRouter.service";
-import { CloudflareWorkersAIService } from "..//service/CloudflareWorkersAI.service";
+import { buildAIProviderError } from "../helpers/BuildAIProviderError.helper";
+import { readAIProviderConfig } from "../helpers/AIProviderConfig.helper";
+import { GeminiProvider } from "./Gemini.provider";
+import { GroqProvider } from "./Groq.provider";
+import { CerebrasProvider } from "./Cerebras.provider";
+import { OpenRouterProvider } from "./OpenRouter.provider";
+import { CloudflareWorkersAIProvider } from "./CloudflareWorkersAI.provider";
 
 type AIProviderName = string;
 
@@ -36,7 +36,7 @@ type ProviderExternalQuota = {
 
 type ProviderConfig = {
   name: AIProviderName;
-  service: IProxyIAService;
+  client: IProxyAIProvider;
   priority: number;
   dailyBudgetRequests: number;
   dailyBudgetTokens: number;
@@ -168,7 +168,7 @@ export class AIProviderRouterService {
           `AI Router choose provider=${candidate.provider} score=${candidate.score.toFixed(2)} reasons=${candidate.reasons.join("|")} dailyRem=${candidate.snapshot.dailyRemainingRequests} sliceRem=${candidate.snapshot.sliceRemainingRequests} rpmRem=${candidate.snapshot.minuteRemainingRequests} concRem=${candidate.snapshot.concurrencyRemaining}`,
         );
 
-        const execution = await config.service.execute(
+        const execution = await config.client.execute(
           args.systemPrompt,
           args.userPrompt,
           args.schema,
@@ -219,7 +219,7 @@ export class AIProviderRouterService {
         if (
           mapped.code === AIProviderErrorCode.INVALID_RESPONSE &&
           providerPayload !== undefined &&
-          config.service.repairInvalidResponse
+          config.client.repairInvalidResponse
         ) {
           this.logger.debug(
             `AI Router repair pass triggered provider=${candidate.provider} reason=${mapped.rawMessage}`,
@@ -228,7 +228,7 @@ export class AIProviderRouterService {
           let repairRequestSent = false;
           try {
             const repairedExecution =
-              await config.service.repairInvalidResponse({
+              await config.client.repairInvalidResponse({
                 systemPrompt: args.systemPrompt,
                 userPrompt: args.userPrompt,
                 schemaResponse: args.schema,
@@ -373,26 +373,26 @@ export class AIProviderRouterService {
       );
     }
 
-    return enabled.map((p) => this.readProviderConfig(p.serviceName));
+    return enabled.map((p) => this.readProviderConfig(p.provider));
   }
 
-  private readProviderConfig(serviceName: AIProviderName): ProviderConfig {
+  private readProviderConfig(providerName: AIProviderName): ProviderConfig {
     const entry = readAIProviderConfig().find(
-      (p) => p.serviceName === serviceName,
+      (p) => p.provider === providerName,
     );
     if (!entry) {
       throw new AIProviderError(
         "Router",
         undefined,
         AIProviderErrorCode.CONFIG_ERROR,
-        `Provider service '${serviceName}' not found in AI_PROVIDER_CONFIG`,
+        `Provider '${providerName}' not found in AI_PROVIDER_CONFIG`,
       );
     }
-    const service = this.resolveProviderService(serviceName);
+    const client = this.resolveProviderClient(providerName);
 
     return {
-      name: serviceName,
-      service,
+      name: providerName,
+      client,
       priority: entry.priority,
       dailyBudgetRequests: entry.dailyBudgetRequests,
       dailyBudgetTokens: entry.dailyBudgetTokens,
@@ -401,21 +401,21 @@ export class AIProviderRouterService {
     };
   }
 
-  private resolveProviderService(serviceId: string): IProxyIAService {
-    const serviceName = serviceId.toLowerCase();
+  private resolveProviderClient(providerId: string): IProxyAIProvider {
+    const provider = providerId.toLowerCase();
 
-    if (serviceName === "groq") return GroqService.getInstance();
-    if (serviceName === "gemini") return GeminiService.getInstance();
-    if (serviceName === "cerebras") return CerebrasService.getInstance();
-    if (serviceName === "openrouter") return OpenRouterService.getInstance();
-    if (serviceName === "cloudflare")
-      return CloudflareWorkersAIService.getInstance();
+    if (provider === "groq") return GroqProvider.getInstance();
+    if (provider === "gemini") return GeminiProvider.getInstance();
+    if (provider === "cerebras") return CerebrasProvider.getInstance();
+    if (provider === "openrouter") return OpenRouterProvider.getInstance();
+    if (provider === "cloudflare")
+      return CloudflareWorkersAIProvider.getInstance();
 
     throw new AIProviderError(
       "Router",
       undefined,
       AIProviderErrorCode.CONFIG_ERROR,
-      `Unsupported service '${serviceName}' in AI_PROVIDER_CONFIG. Allowed: groq|gemini|cerebras|openrouter|cloudflare`,
+      `Unsupported provider '${provider}' in AI_PROVIDER_CONFIG. Allowed: groq|gemini|cerebras|openrouter|cloudflare`,
     );
   }
 
